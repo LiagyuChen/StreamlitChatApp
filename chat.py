@@ -1,25 +1,49 @@
 import streamlit as st
 import pandas as pd
+import base64
 
-"""
-The session state is importand in Streamlit. 
-It allows us to store information after refreshing the page or submit buttons or forms.
-"""
-
-
+# Initialize session state
 if 'current_user' not in st.session_state:
     st.session_state['current_user'] = None
+if 'log_chat' not in st.session_state:
+    st.session_state['log_chat'] = False
+if 'chat_data' not in st.session_state:
+    st.session_state['chat_data'] = None
 if 'chat_histories' not in st.session_state:
-    st.session_state['chat_histories'] = pd.DataFrame(columns=['MND Patient Name', 'Chatting To', 'Tag', 'Timestamp', 'Message Content'])
+    st.session_state['chat_histories'] = pd.DataFrame(columns=['MNDName', 'Chatter', 'Tag', 'SubTag', 'Timestamp', 'Message', 'Sender'])
 
-
+# Hangle login
 def login():
     st.session_state['current_user'] = st.text_input("Enter MND patient's name to login:")
     if st.button("Login"):
         st.experimental_rerun()
 
+# Function to convert DataFrame to CSV and then encode it to base64
+def convert_df_to_csv_base64(df):
+    csv_file = df.to_csv(index=False).encode('utf-8')
+    b64 = base64.b64encode(csv_file).decode()
+    return b64
+
+# Check if user is logged in
 if not st.session_state['current_user']:
     login()
 else:
     st.write(f"Logged in as: {st.session_state['current_user']}")
+    
+    # Choose if log the chat data
+    st.session_state['log_chat'] = st.checkbox("Log chat data?", value=st.session_state['log_chat'])
+
+    if st.session_state['log_chat']:
+        chat_data = st.file_uploader("Upload chat history file:", type=['csv'])
+        
+        # Update session state only if new file is uploaded
+        if chat_data is not None and chat_data != st.session_state['chat_data']:
+            st.session_state['chat_data'] = chat_data
+            st.session_state['chat_histories'] = pd.read_csv(chat_data)
+
+        # Provide a download button if chat_histories is available
+        if st.session_state['chat_data'] and st.session_state['chat_histories'] is not None:
+            file_base64 = convert_df_to_csv_base64(st.session_state['chat_histories'])
+            href = f'<a href="data:file/csv;base64,{file_base64}" download="updated_{st.session_state["chat_data"].name}">Download updated chat history file</a>'
+            st.markdown(href, unsafe_allow_html=True)
 
