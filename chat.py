@@ -34,12 +34,23 @@ else:
     st.session_state['log_chat'] = st.checkbox("Log chat data?", value=st.session_state['log_chat'])
 
     if st.session_state['log_chat']:
+        st.markdown("* Upload a CSV file containing chat history data")
+        st.markdown("* The columns of the CSV file must be exactly the same as:")
+        st.markdown("* `MNDName`, `Chatter`, `Tag`, `SubTag`, `Timestamp`, `Message`, `Sender`")
         chat_data = st.file_uploader("Upload chat history file:", type=['csv'])
         
         # Update session state only if new file is uploaded
         if chat_data is not None and chat_data != st.session_state['chat_data']:
             st.session_state['chat_data'] = chat_data
-            st.session_state['chat_histories'] = pd.read_csv(chat_data)
+            if chat_data.size > 0:
+                try:
+                    data_df = pd.read_csv(chat_data)
+                    if not data_df.empty and data_df.columns.tolist() == ['MNDName', 'Chatter', 'Tag', 'SubTag', 'Timestamp', 'Message', 'Sender']:
+                        st.session_state['chat_histories'] = data_df
+                    else:
+                        st.warning("The uploaded CSV file does not have the correct columns, the original content will be replaced!")
+                except pd.errors.EmptyDataError:
+                    st.warning("The uploaded CSV file is empty!")
 
         # Provide a download button if chat_histories is available
         if st.session_state['chat_data'] and st.session_state['chat_histories'] is not None:
