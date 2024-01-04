@@ -1,8 +1,16 @@
-import os
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from emojis import emojis
+import base64
+import json
+import pyperclip
+from io import BytesIO
+import requests
+from speech_to_text import recognize_speech
+
+def get_image_base64(path):
+    with open(path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
 
 class ChatComponents:
     def __init__(self, user, tag, chat_history_path):
@@ -25,10 +33,6 @@ class ChatComponents:
             self.chatters.extend([new_contact['name'] for new_contact in st.session_state['new_contact'] if new_contact['tag'] == self.tag and new_contact['name'] not in self.chatters])
 
     def initialize_session_state(self):
-        if 'current_message' not in st.session_state:
-            st.session_state['current_message'] = ""
-        if 'selected_emoji' not in st.session_state:
-            st.session_state['selected_emoji'] = ""
         if 'new_contact' not in st.session_state:
             st.session_state['new_contact'] = []
 
@@ -51,85 +55,107 @@ class ChatComponents:
                         else:
                             st.error("This contact already exists!")
 
+    def subtag_value(self):
+        self.subtag = ""
+        for new_contact in st.session_state['new_contact']:
+            if self.chatter_name == new_contact['name']:
+                self.subtag = new_contact['subtag']
+                break
+
+        if self.subtag == "":
+            if self.has_chats:
+                df = st.session_state['chat_histories']
+                chatter_record = df[df["Chatter"] == self.chatter_name]
+                chatter_uniques = chatter_record["SubTag"].unique().tolist()
+                if chatter_uniques:
+                    self.subtag = chatter_uniques[0] if chatter_uniques else ""
+            else:
+                self.subtag = "unknown"
+
     def render_chat_interface(self):
         st.header(f"Chat with {self.tag}")
 
         self.handle_new_contact()
-            
+
         self.chatter_name = st.sidebar.selectbox("Select chatter:", self.chatters)
-        
         if not self.chatter_name:
             st.sidebar.error("Please add a contact to start chatting!")
         else:
-            self.subtag = ""
-            for new_contact in st.session_state['new_contact']:
-                if self.chatter_name == new_contact['name']:
-                    self.subtag = new_contact['subtag']
-                    break
-
-            if self.subtag == "":
-                if self.has_chats:
-                    df = st.session_state['chat_histories']
-                    chatter_record = df[df["Chatter"] == self.chatter_name]
-                    chatter_uniques = chatter_record["SubTag"].unique().tolist()
-                    if chatter_uniques:
-                        self.subtag = chatter_uniques[0] if chatter_uniques else ""
-                else:
-                    self.subtag = "unknown"
-            
+            # Assign the subtag value
+            self.subtag_value()
             # Chat input fields
             self.selected_chatter = st.sidebar.selectbox("Select a sender: ", [self.user, self.chatter_name])
             self.chatter_dict = {self.user: "mnd_message", self.chatter_name: f"{self.tag}_message"}
-            
-            if not st.session_state['log_chat']:
-                self.send_message_button = False
-                message_key = self.chatter_dict[self.selected_chatter]
-                self.chatter_message = st.chat_input("Type a message...", key=message_key)
-                if self.chatter_message:
-                    self.send_message_button = True
-            else:
-                self.input_emojis()
-        
-            # Voice input (placeholder for future implementation)
-            st.sidebar.button("Voice Input")
+            # Select Emojis
+            self.send_emojis()
+            # Voice Input
+            self.voice_input()
+            # Send message button
+            self.send_message()
+
+    def read_emojis(self):
+        with open('emojis.json', 'r', encoding='utf-8') as f:
+            emojis = json.load(f)
+        return emojis
     
-    def sent_message(self):
-        self.send_message_button = True
-        print("Message sent!", self.send_message_button)
-
-    def input_emojis(self):
-        # Emoji selector in the sidebar
-        selected_emoji = st.sidebar.selectbox("Choose an emoji:", list(emojis.keys()), index=0)
-
-        # Add the selected emoji to the current message
-        if st.sidebar.button("Add Emoji"):
-            st.session_state['current_message'] += emojis[selected_emoji]
-        
-        # Chat input field with the current message (and emoji if added)
+    def send_emojis(self):
+        emoji_json = self.read_emojis()
+        emoji_keys = list(emoji_json.keys())
+        emoji_keys.insert(0, "None")
+        emoji_selecter = st.sidebar.selectbox("Choose an emoji:", emoji_keys, index=0)
+        if emoji_selecter != "None":
+            emoji_unicode = emoji_json[emoji_selecter]
+            st.sidebar.markdown(f"copy the emoji: \n{emoji_unicode}")
+    
+    def send_message(self):
+        self.send_message_button = False
         message_key = self.chatter_dict[self.selected_chatter]
-        self.chatter_message = st.text_input("Type your message here...", value=st.session_state['current_message'], key=message_key)
-        self.send_message_button = st.button("Send")
-        
-        # Update the session state with the current input
-        st.session_state['current_message'] = self.chatter_message
+        self.chatter_message = st.chat_input("Type a message...", key=message_key)
+        if self.chatter_message:
+            self.send_message_button = True
+    
+    def voice_input(self):
+        voice_input = st.sidebar.checkbox("Enable Voice Input")
+        if voice_input:
+            audio_upload_type = st.sidebar.radio("Upload audio file from:", ("Local", "URL"))
+            if audio_upload_type == "Local":
+                audio_file = st.sidebar.file_uploader("Upload an audio file", type=['wav', 'mp3'])
+            else:
+                audio_url = st.sidebar.text_input("Enter audio URL:")
+                if audio_url:
+                    response = requests.get(audio_url)
+                    audio_file = response.content
+                else:
+                    audio_file = None
 
-        # Handle sending the message
-        if self.send_message_button:
-            self.chatter_message = st.session_state['current_message']
-            st.session_state['current_message'] = ""
-        else:
-            self.chatter_message = ""
+            if audio_file is not None:
+                st.sidebar.audio(audio_file)
+                # Convert the uploaded file to BytesIO
+                audio_data = BytesIO(audio_file.getvalue())
+                # Process the audio file
+                recognized_text = recognize_speech(audio_data)
+                # Button to copy text to clipboard
+                if st.sidebar.button("Copy recognized text to Clipboard"):
+                    pyperclip.copy(recognized_text)
+                    st.sidebar.success("Copied to clipboard!")
     
     def display_chat_history(self):
         user_chats = st.session_state['chat_histories']
         relevant_chats = user_chats[(user_chats['MNDName'] == self.user) & (user_chats['Chatter'] == self.chatter_name)]
         for _, row in relevant_chats.iterrows():
-            col1, col2 = st.columns([1, 5])
+            col1, col2 = st.columns([5, 5])
             with col1 if row['Sender'] != self.user else col2:
+                man_img_base64 = get_image_base64('assets/man.png')
+                woman_img_base64 = get_image_base64('assets/woman.png')
                 st.markdown(f"""
-                <div style='text-align: {"left" if row['Sender'] != self.user else "right"}; background-color: {"#FCEE98" if row['Sender'] != self.user else "#A4BF7B"}; padding: 10px; border-radius: 10px;'>
-                    <p style='font-size: small; color: grey;'>{row['Timestamp']}</p>
-                    <p>{row['Message']}</p>
+                <div style="display: flex; align-items: center; margin-bottom: 10px; {('justify-content: flex-start;' if row['Sender'] != self.user else 'justify-content: flex-end;')}">
+                    <div style="{('order: 2;' if row['Sender'] == self.user else '')} border-radius: 50%; width: 40px; height: 40px; overflow: hidden; margin-right: 10px; {('margin-left: 10px;' if row['Sender'] == self.user else '')}">
+                        <img src='data:image/png;base64,{man_img_base64 if row['Sender'] == self.user else woman_img_base64}' style="width: 100%; height: auto;">
+                    </div>
+                    <div style="background-color: {'#3399CC' if row['Sender'] != self.user else '#009966'}; color: white; padding: 5px; border-radius: 10px; max-width: 50%; word-wrap: break-word; white-space: normal;">
+                        <div style='font-size: small; color: #CCCCCC;'>{row['Timestamp']}</div>
+                        <div>{row['Message']}</div>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -152,7 +178,6 @@ class ChatComponents:
 
     def run(self):
         self.render_chat_interface()
-        # self.input_emojis()
         self.display_chat_history()
         if self.chatter_name:
             self.process_sending_message()

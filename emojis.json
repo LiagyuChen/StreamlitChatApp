@@ -1,4 +1,4 @@
-emojis = {
+{
     "Smile": "😊",
     "Laughing": "😂",
     "Thumbs Up": "👍",
@@ -9,7 +9,7 @@ emojis = {
     "Crying Face": "😢",
     "Heart Eyes": "😍",
     "Blushing": "😊",
-    "Surprised": "😮",
+    "Surprised": "😲",
     "Angry": "😠",
     "Fearful": "😨",
     "Sunglasses": "😎",
@@ -36,7 +36,7 @@ emojis = {
     "Coffee": "☕",
     "World Globe": "🌍",
     "Sun": "☀️",
-    "Moon": "🌙",
+    "Moon": "🌔",
     "Star": "⭐",
     "Snowflake": "❄️",
     "Fire": "🔥",
@@ -50,7 +50,7 @@ emojis = {
     "Gift": "🎁",
     "Christmas Tree": "🎄",
     "Santa Claus": "🎅",
-    "Flag": "🏁",
+    "Flag": "🚩",
     "Rocket": "🚀",
     "Light Bulb": "💡",
     "Magnifying Glass": "🔍",
@@ -73,3 +73,4 @@ emojis = {
     "Rose": "🌹",
     "Tulip": "🌷"
 }
+
