@@ -2,4 +2,4 @@ pandas
 streamlit
 pyperclip
 llamaapi
-speech_recognition
+SpeechRecognition
