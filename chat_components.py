@@ -135,9 +135,16 @@ class ChatComponents:
                 # Process the audio file
                 recognized_text = recognize_speech(audio_data)
                 # Button to copy text to clipboard
-                if st.sidebar.button("Copy recognized text to Clipboard"):
-                    pyperclip.copy(recognized_text)
-                    st.sidebar.success("Copied to clipboard!")
+                # if st.sidebar.button("Copy recognized text to Clipboard"):
+                #     pyperclip.copy(recognized_text)
+                #     st.sidebar.success("Copied to clipboard!")
+                st.sidebar.markdown(f"""
+                Recognized text\n
+                <div>
+                
+                    {recognized_text}
+                </div>
+                """, unsafe_allow_html=True)
     
     def display_chat_history(self):
         user_chats = st.session_state['chat_histories']
